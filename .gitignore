@@ -1,0 +1,10 @@
+evn
+**.json
+*.csv
+__pycache__
+**.log
+**.sql
+database
+**.db
+chromedriver
+!countries.csv
