@@ -525,3 +525,18 @@ class Booking:
         row = self.cur.fetchall()
         for r in row:
             print(r)
+
+    def merge_db(self):
+        self.cur.execute(f"select * from links")
+        rows = self.cur.fetchall()
+        length = len(rows)
+        for i in range(length):
+            self.log.info(f"{i}/{length}")
+            country = rows[i][0].split('/')[4]
+            if country == 'us':
+                country = 'United States of America'
+            elif country == 'in':
+                country = 'India'
+            else:
+                continue
+            self.save_into_db((rows[i][0],rows[i][1],country))
