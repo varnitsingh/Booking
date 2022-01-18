@@ -23,13 +23,13 @@ def query_single_hotels(start_country):
                 time.sleep(60)
 
 if __name__ == '__main__':
-    B = Booking('fsjahgj','postgreSQ')
+    # B = Booking('fsjahgj','postgreSQ')
     # B.merge_db()
     # B.save_to_csv()
     # B.create_database()
     # B.query_hotels('Ukraine')
-    print(B.count_entries())
-    # query_single_hotels(sys.argv[1])
+    # print(B.count_entries())
+    query_single_hotels(sys.argv[1])
     quit()
     with open('countries.csv','r',encoding='utf-8-sig') as rf:
         reader = csv.reader(rf)
