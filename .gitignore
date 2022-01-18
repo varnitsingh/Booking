@@ -4,7 +4,8 @@ evn
 __pycache__
 **.log
 **.sql
-database
-**.db
+**.html
 chromedriver
 !countries.csv
+images
+!hotels.db

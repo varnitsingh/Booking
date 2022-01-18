@@ -1,13 +1,19 @@
 import logging
 from logging import handlers
+from re import T
 import sys
 import time
 import json
 import csv
+import requests
 from dataclasses import asdict, astuple
 import sqlite3
 import pycountry
 import psycopg2
+from bs4 import BeautifulSoup
+from lxml import etree
+import random
+import string
 
 from selenium import webdriver
 from selenium.common import exceptions
@@ -44,11 +50,11 @@ class Booking:
         self.log.addHandler(ch)
 
         # Driver
-        # options = Options()
-        # options.headless = False
-        # self.driver = webdriver.Firefox(
-        #     options=options, executable_path='./geckodriver')
-        # self.driver.maximize_window()
+        options = Options()
+        options.headless = True
+        self.driver = webdriver.Firefox(
+            options=options, executable_path='./geckodriver')
+        self.driver.maximize_window()
 
         # options = Options()
         # options.headless = False
@@ -83,10 +89,27 @@ class Booking:
         except:
             pass
 
+    def save_to_csv(self):
+        self.cur.execute("select * from hotels")
+        rows = self.cur.fetchall()
+        print(len(rows))
+        # with open('hotels.csv','w',encoding='utf-8-sig') as wf:
+        #     writer = csv.writer(wf)
+        #     writer.writerows(rows)
+
     def create_database(self):
-        self.cur.execute('''CREATE TABLE hotel_links
-               (url text primary key not null, price text,country text)''')
+        # self.cur.execute('''CREATE TABLE hotel_links
+        #        (url text primary key not null, price text,country text)''')
         # self.cur.execute('delete from links')
+        # self.cur.execute("Drop table hotels")
+        # self.con.commit()
+        # self.cur.execute('''CREATE TABLE hotels
+        #        (hotel_name text,address text, country text, phone text, email text, website text, room_types text, 
+        #        room_pricing real, features text, facilities text, description text, rating integer, 
+        #        review_score float, policies text, place_of_interest_nearby text, transport_nearby text, 
+        #        attractions_nearby text,url text primary key not null)''')
+        # self.con.commit()
+        self.cur.execute('Create table images (filename text primary key not null, url text)')
         self.con.commit()
 
     def save_into_db(self, row: tuple):
@@ -106,11 +129,65 @@ class Booking:
                 # self.log.info(e)
                 pass
 
-    def parse_hotel(self, url, room_price) -> Hotel:
+    def save_hotel_into_db(self,row:tuple):
+        if self.database == 'postgreSQL':
+            try:
+                self.cur.execute("Insert into hotels values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", row)
+                self.con.commit()
+            except Exception as e:
+                self.log.info(e)
+                self.con.rollback()
+                pass
+        else:
+            try:
+                self.cur.execute("Insert into hotels values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", row)
+                self.con.commit()
+            except Exception as e:
+                self.log.info(e)
+                pass
+        
+    def save_image_into_db(self,row:tuple):
+        try:
+            self.cur.execute("Insert into images values (%s,%s,%s)",row)
+            self.con.commit()
+            return True
+        except Exception as e:
+            self.log.info(e)
+            self.con.rollback()
+            return False
+        
+    def save_images(self,url:str):
+        images = []
+        self.driver.find_elements(By.XPATH, XPATHS['images'])
+        for i in range(len(self.driver.find_elements(By.XPATH, XPATHS['images']))):
+            link = self.driver.find_element(
+                By.XPATH, f"({XPATHS['images']})[{i+1}]").get_attribute("href")
+            print('.',end='')
+            images.append(link)
+
+        print()
+
+        self.log.info(f"Saving {len(images)} images.")
+
+        for image in images[:20]:
+            filename = image.split('?')[0].split('/')[-1]
+            while True:
+                if self.save_image_into_db((filename,url,image)):
+                    break
+                else:
+                    filename = ''.join(random.choice(string.ascii_lowercase) for i in range(7)) + '.jpg'
+            # img_data = requests.get(image).content
+            # with open('images/'+filename, 'wb') as handler:
+            #     handler.write(img_data)
+
+    def parse_hotel(self, url, room_price,country) -> Hotel:
         self.driver.get(url)
+        # time.sleep(3)
         # time.sleep(7)
         H = Hotel()
         H.room_pricing = room_price
+        H.country = country
+        H.url = url
         H.hotel_name = self.driver.find_element(
             By.XPATH, XPATHS['hotel_name']).text.strip()
         H.address = self.driver.find_element(
@@ -164,8 +241,11 @@ class Booking:
             except:
                 H.description = None
         H.rating = len(self.driver.find_elements(By.XPATH, XPATHS['rating']))
-        H.review_score = self.driver.find_element(
-            By.XPATH, XPATHS['review_score']).text.strip()
+        try:
+            H.review_score = float(self.driver.find_element(
+                By.XPATH, XPATHS['review_score']).text.strip())
+        except:
+            H.review_score = None
         H.policies = self.driver.find_element(
             By.XPATH, XPATHS['policies']).text.strip()
 
@@ -173,34 +253,52 @@ class Booking:
         H.email = None
         H.website = None
 
+        # Doing image stuff
+        # try:
+        #     self.save_images(url)
+        # except:
+        #     self.log.warning("Error occured while saving images.")
+        
+
         return H
         # with open('data.json','w',encoding='utf-8-sig') as wf:
         #     json.dump(asdict(H),wf,indent=4)
 
-    def query_hotels(self):
-        urls = []
+    def query_hotels(self,country):
+        con = sqlite3.connect('database/hotels.db')
+        cur = con.cursor()
         try:
-            with open('urls.json', 'r', encoding='utf-8-sig') as rf:
-                urls = json.load(rf)
+            cur.execute(f"select * from hotel_links where country='{country}'")
+        except:
+            self.log.warning(country)
+        data = {}
+        try:
+            with open(f'database/{country}.json','r') as rf:
+                data = json.load(rf)
         except:
             pass
+        try:
+            start = data[country] + 1
+        except:
+            start = 0
+        rows = cur.fetchall()
+        length = len(rows)
+        for i in range(start,length):
+            self.log.info(f"[{country}]{i}/{length}")
+            row = rows[i]
+            url = row[0]
+            price = round(float(row[1].split(' ')[1].replace(',',''))/7,2)
+            try:
+                H = self.parse_hotel(url,price,country)
+                self.save_hotel_into_db(astuple(H))
+            except:
+                self.log.info("Sleeping for 60 seconds. Parse error.")
+                time.sleep(60)
+            data[country] = i
+            with open(f'database/{country}.json','w') as wf:
+                json.dump(data,wf,indent=4)
+        con.close()
 
-        first = True
-        length = len(urls)
-        hotels = []
-        for i in range(length):
-            self.log.info(f"Scraping: {i+1}/{length}")
-            H = self.parse_hotel(urls[i]['hotel_url'], urls[i]['room_price'])
-            hotels.append(asdict(H))
-            with open('hotels.csv', 'a', encoding='utf-8-sig') as wf:
-                writer = csv.writer(wf)
-                if first:
-                    writer.writerow(asdict(H).keys())
-                    first = False
-                writer.writerow(astuple(H))
-
-            with open('hotels.json', 'w', encoding='utf-8-sig') as wf:
-                json.dump(hotels, wf, indent=4)
 
     def save_hotel_links(self,country):
         # urls = {}
@@ -290,11 +388,13 @@ class Booking:
             data = json.load(rf)
         if country in data:
             idx = data[country]['index']
+            start = data[country]["value"]
         else:
             idx = 0
+            start = 0
         while idx < len(data_filter_groups):
             temp_xpath = f"(//div[@data-filters-group='{data_filter_groups[idx]}'])[1]//input"
-            for i in range(len(self.driver.find_elements(By.XPATH, temp_xpath))):
+            for i in range(start,len(self.driver.find_elements(By.XPATH, temp_xpath))):
                 self.log.info(
                     f"[{country}][{data_filter_groups[idx]}]Clicking option: {i+1}")
                 element = self.driver.find_element(
@@ -308,10 +408,20 @@ class Booking:
                     self.log.info("Failed to scrape hotels.")
                 self.driver.execute_script(
                     "arguments[0].click();", element)
+
+                data[country] = {
+                    "index": idx,
+                    "value": i + 1
+                }
+                self.save_progress(data)
                 time.sleep(10)
 
             idx += 1
-            data[country] = {'index':idx}
+            start = 0
+            data[country] = {
+                'index':idx,
+                "value": start
+                }
             self.save_progress(data)
 
         return True
@@ -410,7 +520,8 @@ class Booking:
         # with open('data2.json','w',encoding='utf-8-sig') as wf:
         #     json.dump(data,wf,indent=4)
 
-    def count_entries(self,country) -> int:
+    def count_entries(self) -> int:
         self.cur.execute(f"select country,count(country) from hotel_links group by country order by count(country)")
         row = self.cur.fetchall()
-        return row
+        for r in row:
+            print(r)

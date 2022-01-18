@@ -44,7 +44,6 @@ passlib==1.7.4
 pgadmin4==6.3
 Pillow==8.3.2
 psutil==5.9.0
-psycopg2-binary==2.8.6
 pyasn1==0.4.8
 pycodestyle==2.8.0
 pycountry==20.7.3

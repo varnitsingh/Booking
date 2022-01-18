@@ -13,6 +13,8 @@ XPATHS = {
     "nearby_places": "//div[@class='hp_location_block__section_container']",
     "transport_nearby": "//div[@class='hp_location_block__section_container transport_airport']/ul/li",
 
+    "images": "//a[starts-with(@href, 'https://t-cf.bstatic.com')]",
+
     # parsing through search results.
     "main_table": "//div[@class='_814193827']",
     "hotel_link": "//a[@data-testid='title-link']",

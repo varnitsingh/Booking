@@ -4,6 +4,7 @@ from dataclasses import dataclass
 class Hotel:
     hotel_name:str #
     address:str    #
+    country:str
     phone:str      #?
     email:str      #?
     website:str    #?
@@ -18,3 +19,4 @@ class Hotel:
     place_of_interest_nearby:str #
     transport_nearby:str #
     attractions_nearby:str #
+    url:str
